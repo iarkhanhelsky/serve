@@ -22,7 +22,10 @@ func BuildConfigJSON(opts types.RunOptions, accessLogFile string) ([]byte, error
 					},
 					"response": map[string]any{
 						"set": map[string]any{
-							"X-Request-Id": []string{"{http.request.id}"},
+							"X-Request-Id":  []string{"{http.request.id}"},
+							"Cache-Control": []string{"no-store, max-age=0"},
+							"Pragma":        []string{"no-cache"},
+							"Expires":       []string{"0"},
 						},
 					},
 				},
@@ -46,7 +49,10 @@ func BuildConfigJSON(opts types.RunOptions, accessLogFile string) ([]byte, error
 					},
 					"response": map[string]any{
 						"set": map[string]any{
-							"X-Request-Id": []string{"{http.request.id}"},
+							"X-Request-Id":  []string{"{http.request.id}"},
+							"Cache-Control": []string{"no-store, max-age=0"},
+							"Pragma":        []string{"no-cache"},
+							"Expires":       []string{"0"},
 						},
 					},
 				},

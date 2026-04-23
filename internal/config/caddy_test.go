@@ -27,6 +27,9 @@ func TestBuildCaddyfileStatic(t *testing.T) {
 	if !strings.Contains(got, `"X-Request-Id":["{http.request.id}"]`) {
 		t.Fatal("expected request id header injection in static mode")
 	}
+	if !strings.Contains(got, `"Cache-Control":["no-store, max-age=0"]`) {
+		t.Fatal("expected no-store cache-control in static mode")
+	}
 }
 
 func TestBuildCaddyfileProxy(t *testing.T) {
@@ -48,5 +51,8 @@ func TestBuildCaddyfileProxy(t *testing.T) {
 	}
 	if !strings.Contains(got, `"X-Request-Id":["{http.request.id}"]`) {
 		t.Fatal("expected request id header injection in proxy mode")
+	}
+	if !strings.Contains(got, `"Cache-Control":["no-store, max-age=0"]`) {
+		t.Fatal("expected no-store cache-control in proxy mode")
 	}
 }
