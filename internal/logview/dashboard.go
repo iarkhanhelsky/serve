@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -88,10 +89,10 @@ func (s *dashboardState) frame(now time.Time, opts dashboardFrameOptions, width 
 		"-------------",
 		fmt.Sprintf(
 			"Status Buckets: %s %s %s %s",
-			colorizeClassCount("2xx", s.statusCounts["2xx"], opts.colorize),
-			colorizeClassCount("3xx", s.statusCounts["3xx"], opts.colorize),
-			colorizeClassCount("4xx", s.statusCounts["4xx"], opts.colorize),
-			colorizeClassCount("5xx", s.statusCounts["5xx"], opts.colorize),
+			colorizeClassCount("2xx", s.statusCounts["2xx"], false),
+			colorizeClassCount("3xx", s.statusCounts["3xx"], false),
+			colorizeClassCount("4xx", s.statusCounts["4xx"], false),
+			colorizeClassCount("5xx", s.statusCounts["5xx"], false),
 		),
 	}
 	if len(s.recent) == 0 {
@@ -276,6 +277,9 @@ func (m dashboardModel) View() string {
 		frame = strings.Join(lines, "\n")
 	}
 	if m.opts.colorize {
+		frame = colorizeStatusBuckets(frame)
+	}
+	if m.opts.colorize {
 		frame = styleDashboardFrame(frame)
 	}
 	return frame
@@ -298,6 +302,37 @@ func styleDashboardFrame(frame string) string {
 		case strings.HasPrefix(line, "waiting for requests"):
 			lines[i] = subtleStyle.Italic(true).Render(line)
 		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+func colorizeStatusBuckets(frame string) string {
+	lines := strings.Split(frame, "\n")
+	for i, line := range lines {
+		const prefix = "Status Buckets: "
+		if !strings.HasPrefix(line, prefix) {
+			continue
+		}
+		tokens := strings.Fields(strings.TrimPrefix(line, prefix))
+		if len(tokens) == 0 {
+			continue
+		}
+
+		colored := make([]string, 0, len(tokens))
+		for _, token := range tokens {
+			parts := strings.SplitN(token, "=", 2)
+			if len(parts) != 2 {
+				colored = append(colored, token)
+				continue
+			}
+			count, err := strconv.Atoi(parts[1])
+			if err != nil {
+				colored = append(colored, token)
+				continue
+			}
+			colored = append(colored, colorizeClassCount(parts[0], count, true))
+		}
+		lines[i] = prefix + strings.Join(colored, " ")
 	}
 	return strings.Join(lines, "\n")
 }

@@ -161,6 +161,39 @@ func TestDashboardFrameWaitingShownOnce(t *testing.T) {
 	}
 }
 
+func TestDashboardFrameStatusBucketsRemainPlainBeforeViewColorize(t *testing.T) {
+	state := newDashboardState(time.Unix(100, 0))
+	evt := AccessEvent{}
+	evt.Request.Method = "GET"
+	evt.Request.URI = "/healthz"
+	evt.Status = 200
+	state.addEvent(evt)
+
+	frame := state.frame(time.Unix(101, 0), dashboardFrameOptions{
+		colorize: true,
+		listen:   ":8000",
+		root:     "/tmp/site",
+		mode:     "status",
+	}, 20)
+
+	if strings.Contains(frame, "\033[") {
+		t.Fatalf("frame should remain plain before view colorization, got: %q", frame)
+	}
+}
+
+func TestColorizeStatusBuckets(t *testing.T) {
+	in := "Status Buckets: 2xx=10 3xx=0 4xx=2 5xx=1"
+	out := colorizeStatusBuckets(in)
+	for _, token := range []string{"2xx=10", "3xx=0", "4xx=2", "5xx=1"} {
+		if !strings.Contains(out, token) {
+			t.Fatalf("expected bucket token %q in colorized output: %q", token, out)
+		}
+	}
+	if !strings.HasPrefix(out, "Status Buckets: ") {
+		t.Fatalf("expected status bucket prefix in output: %q", out)
+	}
+}
+
 func TestClampLine(t *testing.T) {
 	if got := clampLine("abcdefghijklmnopqrstuvwxyz", 10); got != "abcdefg..." {
 		t.Fatalf("unexpected clamp result: %q", got)
