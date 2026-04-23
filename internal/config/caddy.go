@@ -85,6 +85,12 @@ func BuildConfigJSON(opts types.RunOptions, accessLogFile string) ([]byte, error
 		},
 		"logging": map[string]any{
 			"logs": map[string]any{
+				"default": map[string]any{
+					"level": "ERROR",
+					"writer": map[string]any{
+						"output": "discard",
+					},
+				},
 				"access": map[string]any{
 					"level": "INFO",
 					"encoder": map[string]any{

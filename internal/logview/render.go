@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -30,9 +31,48 @@ type AccessEvent struct {
 }
 
 func ParseAccessEvent(line []byte) (AccessEvent, error) {
-	var evt AccessEvent
-	err := json.Unmarshal(line, &evt)
-	return evt, err
+	type accessEventAlias AccessEvent
+	var raw struct {
+		accessEventAlias
+		Timestamp json.RawMessage `json:"ts"`
+	}
+	raw.accessEventAlias = accessEventAlias{}
+	if err := json.Unmarshal(line, &raw); err != nil {
+		return AccessEvent{}, err
+	}
+
+	evt := AccessEvent(raw.accessEventAlias)
+	if len(raw.Timestamp) > 0 {
+		ts, err := parseLogTimestamp(raw.Timestamp)
+		if err == nil {
+			evt.Timestamp = ts
+		}
+	}
+	return evt, nil
+}
+
+func parseLogTimestamp(raw json.RawMessage) (time.Time, error) {
+	// Caddy/Zap can emit ts as numeric unix seconds (float) or string values.
+	var num float64
+	if err := json.Unmarshal(raw, &num); err == nil {
+		sec := int64(num)
+		nsec := int64((num - float64(sec)) * float64(time.Second))
+		return time.Unix(sec, nsec).UTC(), nil
+	}
+
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		if t, err := time.Parse(time.RFC3339Nano, s); err == nil {
+			return t, nil
+		}
+		if f, err := strconv.ParseFloat(s, 64); err == nil {
+			sec := int64(f)
+			nsec := int64((f - float64(sec)) * float64(time.Second))
+			return time.Unix(sec, nsec).UTC(), nil
+		}
+	}
+
+	return time.Time{}, fmt.Errorf("unsupported ts format: %s", string(raw))
 }
 
 func RenderPretty(evt AccessEvent, configuredUpstream string) string {

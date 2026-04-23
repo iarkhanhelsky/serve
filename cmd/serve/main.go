@@ -25,7 +25,7 @@ func main() {
 		logFile    string
 	)
 
-	flag.StringVar(&logMode, "log", "pretty", "log mode: pretty|compact|json")
+	flag.StringVar(&logMode, "log", "status", "log mode: status|pretty|compact|json")
 	flag.BoolVar(&errorsOnly, "errors-only", false, "print only failed requests (status >= 400)")
 	flag.StringVar(&logFile, "log-file", "", "path to raw access log file (default: temp file)")
 	flag.Usage = func() {
@@ -44,7 +44,7 @@ func main() {
 	if err != nil {
 		exitf("parse args: %v", err)
 	}
-	if logMode != "pretty" && logMode != "compact" && logMode != "json" {
+	if logMode != "status" && logMode != "pretty" && logMode != "compact" && logMode != "json" {
 		exitf("invalid --log value: %s", logMode)
 	}
 	opts.LogMode = logMode

@@ -5,7 +5,8 @@ import (
 	"fmt"
 
 	"github.com/caddyserver/caddy/v2"
-	_ "github.com/caddyserver/caddy/v2/modules/standard"
+	_ "github.com/caddyserver/caddy/v2/modules/caddyhttp/standard"
+	_ "github.com/caddyserver/caddy/v2/modules/logging"
 )
 
 // Run starts Caddy with JSON config and blocks until ctx is canceled.

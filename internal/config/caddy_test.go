@@ -30,6 +30,9 @@ func TestBuildCaddyfileStatic(t *testing.T) {
 	if !strings.Contains(got, `"Cache-Control":["no-store, max-age=0"]`) {
 		t.Fatal("expected no-store cache-control in static mode")
 	}
+	if !strings.Contains(got, `"default"`) || !strings.Contains(got, `"output":"discard"`) || !strings.Contains(got, `"level":"ERROR"`) {
+		t.Fatal("expected default caddy logs to be suppressed")
+	}
 }
 
 func TestBuildCaddyfileProxy(t *testing.T) {
@@ -54,5 +57,8 @@ func TestBuildCaddyfileProxy(t *testing.T) {
 	}
 	if !strings.Contains(got, `"Cache-Control":["no-store, max-age=0"]`) {
 		t.Fatal("expected no-store cache-control in proxy mode")
+	}
+	if !strings.Contains(got, `"default"`) || !strings.Contains(got, `"output":"discard"`) || !strings.Contains(got, `"level":"ERROR"`) {
+		t.Fatal("expected default caddy logs to be suppressed")
 	}
 }
