@@ -1,11 +1,15 @@
 # serve
 
-`serve` is a single-binary dev tool built on embedded Caddy.
+`serve` is a single-binary dev tool built on Go's standard library HTTP stack.
 
 It supports:
-- static file serving with directory browse mode
-- reverse proxy with HTTP and WebSocket support
+- static file serving with directory browse mode (directories first)
+- reverse proxy with HTTP/1.1 support
 - ngrok-style live status screen with request metrics
+- request id and no-cache headers on responses
+
+Current limitation:
+- WebSocket proxying is intentionally disabled
 
 ## Requirements
 
@@ -69,3 +73,7 @@ Size check example:
 ls -lh ./bin/serve
 go version -m ./bin/serve | rg "build\\s+-trimpath|build\\s+-ldflags|build\\s+CGO_ENABLED"
 ```
+
+Typical local sizes after Caddy retirement (darwin/arm64):
+- `make build`: about 14MB
+- `make build-release`: about 9-10MB

@@ -1,7 +1,9 @@
 package server_test
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net"
@@ -9,12 +11,11 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/gorilla/websocket"
-	"github.com/iarkhanhelsky/serve/internal/config"
 	"github.com/iarkhanhelsky/serve/internal/server"
 	"github.com/iarkhanhelsky/serve/internal/types"
 )
@@ -27,8 +28,8 @@ func TestStaticAndBrowse(t *testing.T) {
 
 	listen := ":" + freePort(t)
 	logPath := filepath.Join(t.TempDir(), "access.log")
-	opts := types.RunOptions{Root: dir, Listen: listen}
-	runServer(t, opts, logPath)
+	opts := types.RunOptions{Root: dir, Listen: listen, LogFile: logPath}
+	runServer(t, opts)
 
 	resp := mustGet(t, "http://127.0.0.1"+listen+"/hello.txt")
 	body, _ := io.ReadAll(resp.Body)
@@ -51,24 +52,10 @@ func TestStaticAndBrowse(t *testing.T) {
 	}
 }
 
-func TestReverseProxyAndWebsocket(t *testing.T) {
+func TestReverseProxyAndNoWebsocket(t *testing.T) {
 	var upstreamReqID atomic.Value
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		upstreamReqID.Store(r.Header.Get("X-Request-Id"))
-		if websocket.IsWebSocketUpgrade(r) {
-			upgrader := websocket.Upgrader{}
-			conn, err := upgrader.Upgrade(w, r, nil)
-			if err != nil {
-				return
-			}
-			defer conn.Close()
-			mt, msg, err := conn.ReadMessage()
-			if err != nil {
-				return
-			}
-			_ = conn.WriteMessage(mt, msg)
-			return
-		}
 		w.Header().Set("X-Upstream", "ok")
 		_, _ = w.Write([]byte("proxied"))
 	}))
@@ -77,8 +64,8 @@ func TestReverseProxyAndWebsocket(t *testing.T) {
 	_, port, _ := net.SplitHostPort(upstream.Listener.Addr().String())
 	listen := ":" + freePort(t)
 	logPath := filepath.Join(t.TempDir(), "access.log")
-	opts := types.RunOptions{Listen: listen, Upstream: "127.0.0.1:" + port}
-	runServer(t, opts, logPath)
+	opts := types.RunOptions{Listen: listen, Upstream: "127.0.0.1:" + port, LogFile: logPath}
+	runServer(t, opts)
 
 	resp := mustGet(t, "http://127.0.0.1"+listen+"/")
 	body, _ := io.ReadAll(resp.Body)
@@ -95,38 +82,79 @@ func TestReverseProxyAndWebsocket(t *testing.T) {
 		t.Fatal("expected X-Request-Id request header to be injected upstream")
 	}
 
-	wsURL := "ws://127.0.0.1" + listen + "/ws"
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	req, err := http.NewRequest(http.MethodGet, "http://127.0.0.1"+listen+"/ws", nil)
 	if err != nil {
-		t.Fatalf("dial websocket: %v", err)
+		t.Fatalf("build websocket-like request: %v", err)
 	}
-	defer conn.Close()
-	if err := conn.WriteMessage(websocket.TextMessage, []byte("ping")); err != nil {
-		t.Fatalf("ws write: %v", err)
-	}
-	_, msg, err := conn.ReadMessage()
+	req.Header.Set("Connection", "Upgrade")
+	req.Header.Set("Upgrade", "websocket")
+	wsResp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		t.Fatalf("ws read: %v", err)
+		t.Fatalf("websocket-like request: %v", err)
 	}
-	if string(msg) != "ping" {
-		t.Fatalf("ws echo: got %q want ping", string(msg))
+	defer wsResp.Body.Close()
+	if wsResp.StatusCode != http.StatusNotImplemented {
+		t.Fatalf("expected websocket disabled status 501, got %d", wsResp.StatusCode)
 	}
 }
 
-func runServer(t *testing.T, opts types.RunOptions, logPath string) {
-	t.Helper()
-	if err := os.WriteFile(logPath, nil, 0o644); err != nil {
-		t.Fatalf("prepare log file: %v", err)
+func TestAccessLogContract(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "hello.txt"), []byte("hello"), 0o644); err != nil {
+		t.Fatalf("write fixture: %v", err)
 	}
-	cfg, err := config.BuildConfigJSON(opts, logPath)
-	if err != nil {
-		t.Fatalf("build config: %v", err)
+
+	listen := ":" + freePort(t)
+	logPath := filepath.Join(t.TempDir(), "access.log")
+	opts := types.RunOptions{Root: dir, Listen: listen, LogFile: logPath}
+	runServer(t, opts)
+
+	resp := mustGet(t, "http://127.0.0.1"+listen+"/hello.txt")
+	_, _ = io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		b, err := os.ReadFile(logPath)
+		if err == nil && len(b) > 0 {
+			line := b
+			scanner := bufio.NewScanner(strings.NewReader(string(b)))
+			if scanner.Scan() {
+				line = append([]byte(nil), scanner.Bytes()...)
+			}
+			var evt map[string]any
+			if err := json.Unmarshal(line, &evt); err != nil {
+				t.Fatalf("expected JSON log line: %v", err)
+			}
+			if _, ok := evt["ts"]; !ok {
+				t.Fatal("expected ts in access event")
+			}
+			if _, ok := evt["request"]; !ok {
+				t.Fatal("expected request in access event")
+			}
+			if _, ok := evt["status"]; !ok {
+				t.Fatal("expected status in access event")
+			}
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("expected access log at %s", logPath)
+}
+
+func runServer(t *testing.T, opts types.RunOptions) {
+	t.Helper()
+	if opts.LogFile == "" {
+		opts.LogFile = filepath.Join(t.TempDir(), "access.log")
+	}
+	if err := os.WriteFile(opts.LogFile, nil, 0o644); err != nil {
+		t.Fatalf("prepare log file: %v", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
 	go func() {
-		err := server.Run(ctx, cfg)
+		err := server.Run(ctx, opts)
 		if err != nil && !errors.Is(err, context.Canceled) {
 			t.Logf("server run error: %v", err)
 		}

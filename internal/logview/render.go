@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// AccessEvent is a minimal projection of Caddy JSON access logs.
+// AccessEvent is a minimal projection of serve JSON access logs.
 type AccessEvent struct {
 	Timestamp time.Time `json:"ts"`
 	Request   struct {

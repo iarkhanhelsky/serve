@@ -12,7 +12,6 @@ import (
 	"syscall"
 
 	"github.com/iarkhanhelsky/serve/internal/cli"
-	"github.com/iarkhanhelsky/serve/internal/config"
 	"github.com/iarkhanhelsky/serve/internal/logview"
 	"github.com/iarkhanhelsky/serve/internal/server"
 	"github.com/iarkhanhelsky/serve/internal/types"
@@ -75,11 +74,7 @@ func main() {
 		}
 	}()
 
-	cfg, err := config.BuildConfigJSON(opts, opts.LogFile)
-	if err != nil {
-		exitf("build caddy config: %v", err)
-	}
-	if err := server.Run(ctx, cfg); err != nil && !errors.Is(err, context.Canceled) {
+	if err := server.Run(ctx, opts); err != nil && !errors.Is(err, context.Canceled) {
 		exitf("serve failed: %v", err)
 	}
 }
